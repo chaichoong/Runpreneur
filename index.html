@@ -254,17 +254,18 @@
     <a class="nav-link" data-page="stats"><span class="nav-icon">📈</span> Stats</a>
   </nav>
   <div class="sidebar-footer">
-    <div id="live-badge" style="display:inline-flex;align-items:center;gap:6px;background:rgba(234,179,8,.15);border:1px solid rgba(234,179,8,.3);color:#fbbf24;border-radius:20px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer" onclick="loadAllRecords()">⟳ Connecting...</div>
+    <div id="live-badge" style="display:inline-flex;align-items:center;gap:6px;background:rgba(234,179,8,.15);border:1px solid rgba(234,179,8,.3);color:#fbbf24;border-radius:20px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer" onclick="promptForApiKey()">⟳ Connecting...</div>
     <div id="sync-label" style="font-size:10px;color:var(--muted);margin-top:5px"></div>
-    <button onclick="loadAllRecords()" style="margin-top:8px;background:none;border:1px solid var(--border);color:var(--muted);padding:5px 10px;font-size:10px;border-radius:4px;cursor:pointer;font-family:'DM Mono',monospace;width:100%">↺ Refresh Now</button>
-    <button onclick="localStorage.removeItem('cm_at_key'); showApiKeyPrompt();" style="margin-top:4px;background:none;border:1px solid var(--border);color:var(--muted);padding:5px 10px;font-size:10px;border-radius:4px;cursor:pointer;font-family:'DM Mono',monospace;width:100%">🔑 Change API Key</button>
+    
+    
+    
   </div>
 </div>
 
 <div id="main">
 
   <!-- DASHBOARD -->
-  <div class="page" id="page-dashboard">
+  <div class="page active" id="page-dashboard">
     <div class="page-header">
       <div class="page-title"><span class="emoji">📊</span> Publishing Activity</div>
       <button class="btn btn-primary btn-sm" onclick="openEditDrawer(null)">+ Add New Record</button>
@@ -616,35 +617,10 @@ const PER_PAGE = 50;
 let hasUnsaved = false;
 
 // ============ INIT ============
-document.// ============ NAVIGATION ============
-function navigateTo(page) {
-  // Hide all pages
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  // Deactivate all nav links
-  document.querySelectorAll('.nav-link').forEach(a => a.classList.remove('active'));
-  // Show target page
-  const pageEl = document.getElementById('page-' + page);
-  if (pageEl) pageEl.classList.add('active');
-  // Activate nav link
-  const navEl = document.querySelector('.nav-link[data-page="' + page + '"]');
-  if (navEl) navEl.classList.add('active');
-  // Render the page content
-  renderPage(page);
-}
-
-addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', () => {
   loadData();
-  document.querySelectorAll('.nav-link').forEach(a => {
-    a.addEventListener('click', (e) => {
-      e.preventDefault();
-      navigateTo(a.dataset.page);
-    });
-  });
-  document.querySelectorAll('.modal-overlay').forEach(o => {
-    o.addEventListener('click', e => { if(e.target===o) o.classList.remove('open'); });
-  });
-  // Show dashboard by default
-  navigateTo('dashboard');
+  document.querySelectorAll('.nav-link').forEach(a => a.addEventListener('click', () => navigateTo(a.dataset.page)));
+  document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e => { if(e.target===o) o.classList.remove('open'); }));
 });
 
 // ============ LIVE DATA LAYER ============
@@ -720,9 +696,20 @@ const SKIP_WRITE = new Set(['engTotal','engMonth','rank']);
 function getApiKey() {
   return localStorage.getItem('cm_at_key') || '';
 }
- else if (key !== null && key.trim().length > 0) {
+
+function promptForApiKey(force) {
+  const current = getApiKey();
+  if (!force && current) { loadAllRecords(); return; }
+  const key = prompt(
+    'Enter your Airtable Personal Access Token\n(starts with "pat..." — get it from airtable.com/create/tokens):',
+    current
+  );
+  if (key && key.trim().length > 10) {
+    localStorage.setItem('cm_at_key', key.trim());
+    loadAllRecords();
+  } else if (key !== null && key.trim().length > 0) {
     alert('Please enter a valid Airtable token (starts with pat...)');
-    showApiKeyPrompt();
+    promptForApiKey(true);
   }
 }
 
@@ -765,7 +752,7 @@ function toAtFields(fields) {
 
 async function loadAllRecords() {
   const key = getApiKey();
-  if (!key) { showApiKeyPrompt(); return; }
+  if (!key) { promptForApiKey(); return; }
 
   setBadge('loading');
   allRecords = [];
@@ -790,7 +777,7 @@ async function loadAllRecords() {
         setBadge('auth');
         const msg = e.error?.message || 'Invalid token or insufficient permissions';
         alert('Authentication failed: ' + msg + '\n\nMake sure your token has:\n• data.records:read scope\n• data.records:write scope\n• Access to the Operations Director base');
-        showApiKeyPrompt();
+        promptForApiKey(true);
         return;
       }
       if (!res.ok) {
@@ -874,193 +861,42 @@ async function atDelete(recId) {
   }).catch(e => console.error('atDelete:', e));
 }
 
-function setBadge(state, count, msg) {
+function setBadge(state, count) {
   const b = document.getElementById('live-badge');
   const l = document.getElementById('sync-label');
   if (!b) return;
   if (state === 'loading') {
     b.textContent = '⟳ Loading...';
-    b.style.background = 'rgba(234,179,8,.15)'; b.style.color = '#fbbf24'; b.style.borderColor = 'rgba(234,179,8,.3)';
+    b.style.background = 'rgba(234,179,8,.15)'; b.style.color = '#fbbf24';
+    b.style.borderColor = 'rgba(234,179,8,.3)';
   } else if (state === 'live') {
     b.textContent = '● Live — ' + count + ' records';
-    b.style.background = 'rgba(34,197,94,.15)'; b.style.color = 'var(--green)'; b.style.borderColor = 'rgba(34,197,94,.3)';
+    b.style.background = 'rgba(34,197,94,.15)'; b.style.color = 'var(--green)';
+    b.style.borderColor = 'rgba(34,197,94,.3)';
     if (l) l.textContent = 'Synced ' + new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
-  } else if (state === 'nokey') {
-    b.textContent = '🔑 Click to connect'; b.style.background = 'rgba(255,107,53,.15)'; b.style.color = '#ff6b35'; b.style.borderColor = 'rgba(255,107,53,.3)';
-    b.onclick = showApiKeyPrompt;
+  } else if (state === 'auth') {
+    b.textContent = '⚠ Auth Error — click to fix'; b.style.color = 'var(--red)';
   } else if (state === 'error') {
-    b.textContent = '✗ Error — click to retry'; b.style.background = 'rgba(239,68,68,.15)'; b.style.color = 'var(--red)'; b.style.borderColor = 'rgba(239,68,68,.3)';
-    b.onclick = loadAllRecords;
-    if (l) l.textContent = msg || 'Check console for details';
+    b.textContent = '✗ Load Error'; b.style.color = 'var(--red)';
   }
 }
 
 // These replace localStorage-based versions
-// ============ INIT + CONNECTION ============
-
-let _refreshTimer = null;
-
 function loadData() {
-  const key = localStorage.getItem('cm_at_key') || '';
-  if (!key) {
-    showApiKeyPrompt();
-    return;
-  }
+  const key = getApiKey();
+  if (!key) { promptForApiKey(); return; }
   loadAllRecords();
 }
+function saveToStorage() { /* no-op — writes go straight to Airtable */ }
+function markUnsaved() { /* no-op in live mode */ }
 
-function getApiKey() {
-  return localStorage.getItem('cm_at_key') || '';
-}
-
-function saveToStorage() { /* live mode — no-op */ }
-function markUnsaved() { /* live mode — no-op */ }
-
-function showApiKeyPrompt() {
-  setBadge('nokey');
-  // Show prominent overlay prompt
-  const existing = document.getElementById('api-key-overlay');
-  if (existing) return;
-  const overlay = document.createElement('div');
-  overlay.id = 'api-key-overlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center';
-  overlay.innerHTML = `
-    <div style="background:#181c27;border:1px solid #2a3050;border-radius:12px;padding:36px;max-width:480px;width:90%;font-family:'DM Mono',monospace">
-      <div style="font-size:22px;font-weight:800;color:#e8eaf0;margin-bottom:8px;font-family:'Syne',sans-serif">🔑 Connect to Airtable</div>
-      <div style="color:#6b7a99;font-size:13px;margin-bottom:24px">Enter your Airtable Personal Access Token to load live data.</div>
-      <div style="color:#6b7a99;font-size:11px;margin-bottom:8px">Get one at <a href="https://airtable.com/create/tokens" target="_blank" style="color:#ff6b35">airtable.com/create/tokens</a><br>Needs: data.records:read + data.records:write + Operations Director base</div>
-      <input id="api-key-input" type="password" placeholder="patabRlwXs..." autocomplete="off"
-        style="width:100%;box-sizing:border-box;background:#0f1117;border:1px solid #2a3050;border-radius:7px;padding:12px 14px;color:#e8eaf0;font-family:'DM Mono',monospace;font-size:13px;outline:none;margin-bottom:12px">
-      <div id="api-key-error" style="color:#ef4444;font-size:11px;margin-bottom:10px;display:none"></div>
-      <button onclick="connectWithKey()" 
-        style="width:100%;background:#ff6b35;color:#fff;border:none;border-radius:7px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Syne',sans-serif">
-        Connect →
-      </button>
-    </div>`;
-  document.body.appendChild(overlay);
-  // Allow Enter key
-  document.getElementById('api-key-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') connectWithKey();
-  });
-  setTimeout(() => {
-    const inp = document.getElementById('api-key-input');
-    if (inp) inp.focus();
-  }, 100);
-}
-
-async function connectWithKey() {
-  const input = document.getElementById('api-key-input');
-  const errorEl = document.getElementById('api-key-error');
-  const btn = input ? input.nextElementSibling.nextElementSibling : null;
-  const key = input ? input.value.trim() : '';
-  
-  if (!key) {
-    if (errorEl) { errorEl.textContent = 'Please enter your token.'; errorEl.style.display = 'block'; }
-    return;
-  }
-  
-  if (btn) { btn.textContent = 'Connecting...'; btn.disabled = true; }
-  if (errorEl) errorEl.style.display = 'none';
-  
-  // Test the key by making a real API call
-  try {
-    const testUrl = 'https://api.airtable.com/v0/' + AT_BASE + '/' + AT_TABLE + '?pageSize=1';
-    const res = await fetch(testUrl, {
-      headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' }
-    });
-    
-    if (res.status === 401 || res.status === 403) {
-      const e = await res.json().catch(() => ({}));
-      const msg = e.error?.message || 'Invalid token or insufficient permissions.';
-      if (errorEl) { errorEl.textContent = '⚠ ' + msg + ' Check scopes and base access.'; errorEl.style.display = 'block'; }
-      if (btn) { btn.textContent = 'Connect →'; btn.disabled = false; }
-      return;
-    }
-    
-    if (!res.ok) {
-      if (errorEl) { errorEl.textContent = '⚠ Error ' + res.status + '. Try again.'; errorEl.style.display = 'block'; }
-      if (btn) { btn.textContent = 'Connect →'; btn.disabled = false; }
-      return;
-    }
-    
-    // Success — save key and load
-    localStorage.setItem('cm_at_key', key);
-    const overlay = document.getElementById('api-key-overlay');
-    if (overlay) overlay.remove();
-    loadAllRecords();
-    
-  } catch(e) {
-    if (errorEl) { errorEl.textContent = '⚠ Network error: ' + e.message; errorEl.style.display = 'block'; }
-    if (btn) { btn.textContent = 'Connect →'; btn.disabled = false; }
-  }
-}
-
-async function loadAllRecords() {
-  const key = getApiKey();
-  if (!key) { showApiKeyPrompt(); return; }
-
-  setBadge('loading');
-  allRecords = [];
-  let offset = null;
-  let pages = 0;
-
-  try {
-    do {
-      pages++;
-      let url = 'https://api.airtable.com/v0/' + AT_BASE + '/' + AT_TABLE + '?pageSize=100';
-      if (offset) url += '&offset=' + encodeURIComponent(offset);
-
-      const res = await fetch(url, {
-        headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' }
-      });
-
-      if (res.status === 401 || res.status === 403) {
-        localStorage.removeItem('cm_at_key');
-        setBadge('nokey');
-        showApiKeyPrompt();
-        const errEl = document.getElementById('api-key-error');
-        if (errEl) { errEl.textContent = '⚠ Token expired or revoked. Re-enter your token.'; errEl.style.display = 'block'; }
-        return;
-      }
-
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        throw new Error(e.error?.message || 'HTTP ' + res.status);
-      }
-
-      const data = await res.json();
-      (data.records || []).forEach(r => allRecords.push(normaliseRecord(r)));
-      offset = data.offset || null;
-    } while (offset && pages < 50);
-
-    setBadge('live', allRecords.length);
-    renderCurrentPage();
-    showToast('● Live — ' + allRecords.length + ' records loaded', 'success');
-
-    // Start auto-refresh
-    if (_refreshTimer) clearInterval(_refreshTimer);
-    _refreshTimer = setInterval(() => { if (getApiKey()) loadAllRecords(); }, 120000);
-
-  } catch(e) {
-    setBadge('error', 0, e.message);
-    showToast('Load failed: ' + e.message, 'error');
-    console.error('[CM] loadAllRecords:', e);
-  }
-}
-
-
+// Auto-refresh every 2 minutes
+setInterval(() => { if (getApiKey()) loadAllRecords(); }, 120000);
 
 
 function renderCurrentPage() {
   const a = document.querySelector('.nav-link.active');
-  if (a) {
-    const pageEl = document.getElementById('page-' + a.dataset.page);
-    if (pageEl && !pageEl.classList.contains('active')) {
-      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-      pageEl.classList.add('active');
-    }
-    renderPage(a.dataset.page);
-  }
+  if(a) renderPage(a.dataset.page);
 }
 function renderPage(page) {
   const fn = {dashboard:renderDashboard,calendar:renderCalendar,editing:renderEditingPage,copywriting:renderCopywritingPage,qc:renderQCPage,ready:renderReadyPage,published:renderPublishedPage,stats:renderStatsPage};
@@ -1413,79 +1249,9 @@ function getPlatformLinks(type) {
   return [];
 }
 
-// ============ HELPERS ============
-
-// Get a field value from a record (handles both {id, fields{}} and flat formats)
-function fv(r, key) {
-  if (!r) return '';
-  const f = r.fields || r;
-  const val = f[key];
-  if (val === null || val === undefined) return '';
-  // collaborator object
-  if (typeof val === 'object' && !Array.isArray(val) && 'name' in val) return val.name;
-  // array of select objects
-  if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'object' && 'name' in val[0]) return val.map(v => v.name).join(', ');
-  return val;
-}
-
-// Format a date string to DD Mon YYYY
-function fmtDate(d) {
-  if (!d) return '—';
-  try {
-    const dt = new Date(d + (d.length === 10 ? 'T00:00:00' : ''));
-    if (isNaN(dt)) return d;
-    return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  } catch(e) { return d; }
-}
-
-// Status badge HTML
-function statusBadge(status) {
-  const map = {
-    'New Upload': 'badge-new',
-    'Editing and Optimization in Progress': 'badge-editing',
-    'Optimization and Design Done': 'badge-optdone',
-    'Copies in Progress': 'badge-copies',
-    'Quality Control': 'badge-qc',
-    'Approved for Publishing': 'badge-approved',
-    'YT Publishing & SEO in Progress': 'badge-ytseo',
-    'Ready to publish on other platforms': 'badge-readypub',
-    'Publishing In Progress': 'badge-pubprog',
-    'Published': 'badge-published'
-  };
-  const cls = map[status] || 'badge-new';
-  return `<span class="status-badge ${cls}">${status || '—'}</span>`;
-}
-
-// Content type badge HTML
-function typeBadge(type) {
-  const map = {
-    'Long Form Video': 'badge-longform',
-    'Short Form Video': 'badge-shortform',
-    'Learnings From My Diary': 'badge-lfmd'
-  };
-  const cls = map[type] || '';
-  return type ? `<span class="type-badge ${cls}">${type}</span>` : '';
-}
-
-// Check if a record is overdue (pubDate in the past and not published)
-function isOverdue(r) {
-  const status = fv(r, 'status');
-  if (status === 'Published') return false;
-  const d = fv(r, 'pubDate');
-  if (!d) return false;
-  return new Date(d) < new Date(new Date().toDateString());
-}
-
-// Generate a temporary local ID for new records (replaced by AT ID on create)
-function newId() {
-  return 'recNEW' + Date.now() + Math.random().toString(36).slice(2, 7);
-}
-
 function getResponsibleName(r) {
-  const val = fv(r, 'responsible');
-  if (!val) return '—';
-  if (typeof val === 'object' && val.name) return val.name;
-  return String(val);
+  const resp = fv(r,'responsible');
+  return typeof resp === 'object' ? (resp||{}).name||'—' : resp||'—';
 }
 
 // ============ CONTENT PANEL BUILDER ============
@@ -2097,8 +1863,33 @@ function confirmStatusUpdate() {
 }
 
 // ============ ADD RECORD ============
+function openAddModal() {
+  ['new-name','new-raw-link'].forEach(id=>{document.getElementById(id).value='';});
+  document.getElementById('new-date').value='';
+  document.getElementById('new-status').value='New Upload';
+  document.getElementById('new-category').value='';
+  document.getElementById('new-type').value='';
+  document.getElementById('add-modal').classList.add('open');
+}
 
-
+function createRecord() {
+  const name=document.getElementById('new-name').value.trim();
+  if(!name){showToast('Content name is required','error');return;}
+  const rec = {id:newId(),fields:{name,status:document.getElementById('new-status').value}};
+  const date=document.getElementById('new-date').value;
+  const cat=document.getElementById('new-category').value;
+  const type=document.getElementById('new-type').value;
+  const raw=document.getElementById('new-raw-link').value.trim();
+  if(date) rec.fields.pubDate=date;
+  if(cat) rec.fields.category=cat;
+  if(type) rec.fields.type=type;
+  if(raw) rec.fields.rawLink=raw;
+  allRecords.unshift(rec);
+  closeModal('add-modal');
+  markUnsaved();
+  showToast('Record added ✓','success');
+  renderCurrentPage();
+}
 
 // ============ UTILS ============
 function closeModal(id){document.getElementById(id).classList.remove('open');}
